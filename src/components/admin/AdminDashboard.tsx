@@ -371,20 +371,28 @@ const ManageDoctors = () => {
                 onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
                 required
               />
-              <input
-                type="number"
-                placeholder="Experience Years"
-                className="w-full border rounded p-2"
-                value={formData.experience_years}
-                onChange={(e) => setFormData({ ...formData, experience_years: parseInt(e.target.value) || 0 })}
-              />
-              <input
-                type="number"
-                placeholder="Consultation Fee ($)"
-                className="w-full border rounded p-2"
-                value={formData.consultation_fee}
-                onChange={(e) => setFormData({ ...formData, consultation_fee: parseInt(e.target.value) || 0 })}
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Experience (Years)</label>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="0"
+                  className="w-full border rounded p-2"
+                  value={formData.experience_years}
+                  onChange={(e) => setFormData({ ...formData, experience_years: parseInt(e.target.value) || 0 })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Consultation Fee ($)</label>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="0"
+                  className="w-full border rounded p-2"
+                  value={formData.consultation_fee}
+                  onChange={(e) => setFormData({ ...formData, consultation_fee: parseInt(e.target.value) || 0 })}
+                />
+              </div>
               <textarea
                 placeholder="Bio"
                 className="w-full border rounded p-2"

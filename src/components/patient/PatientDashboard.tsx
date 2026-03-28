@@ -4,7 +4,6 @@ import { Link, Routes, Route, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 
-// Doctor List Component
 const DoctorList = () => {
   const [doctors, setDoctors] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -14,16 +13,12 @@ const DoctorList = () => {
     const loadDoctors = async () => {
       setLoading(true)
       let query = supabase
-        .from('doctors')
-        .select(`
-          *,
-          profiles:profiles(full_name, email)
-        `)
+        .from('users')
+        .select('id, full_name, email, specialty, bio, consultation_fee, experience_years, rating, is_active')
+        .eq('role', 'doctor')
         .eq('is_active', true)
 
-      if (specialty) {
-        query = query.eq('specialty', specialty)
-      }
+      if (specialty) query = query.eq('specialty', specialty)
 
       const { data, error } = await query
       if (!error && data) setDoctors(data)
@@ -37,16 +32,13 @@ const DoctorList = () => {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Available Doctors</h2>
-        <select
-          className="border rounded-lg p-2"
-          value={specialty}
-          onChange={(e) => setSpecialty(e.target.value)}
-        >
+        <select className="border rounded-lg p-2" value={specialty} onChange={(e) => setSpecialty(e.target.value)}>
           <option value="">All Specialties</option>
           <option value="Cardiology">Cardiology</option>
           <option value="Dermatology">Dermatology</option>
           <option value="Neurology">Neurology</option>
           <option value="Pediatrics">Pediatrics</option>
+          <option value="General Practice">General Practice</option>
         </select>
       </div>
 
@@ -57,24 +49,19 @@ const DoctorList = () => {
           {doctors.map((doctor) => (
             <div key={doctor.id} className="border rounded-lg p-4 hover:shadow-lg transition">
               <div className="flex items-center space-x-3 mb-3">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-xl">
-                  👨‍⚕️
-                </div>
+                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-xl">👨‍⚕️</div>
                 <div>
-                  <h3 className="font-semibold text-lg">{doctor.profiles?.full_name}</h3>
+                  <h3 className="font-semibold text-lg">{doctor.full_name}</h3>
                   <p className="text-sm text-gray-600">{doctor.specialty}</p>
                 </div>
               </div>
               <p className="text-gray-600 text-sm mb-2">{doctor.bio}</p>
               <div className="flex justify-between items-center mt-3">
-                <span className="text-green-600 font-bold">${doctor.consultation_fee}</span>
-                <span className="text-sm text-gray-500">{doctor.experience_years} years exp.</span>
+                <span className="text-green-600 font-bold">${doctor.consultation_fee || 0}</span>
+                <span className="text-sm text-gray-500">{doctor.experience_years || 0} years exp.</span>
               </div>
-              <Link
-                to={`/patient/book/${doctor.id}`}
-                className="mt-3 block text-center bg-blue-500 text-white py-2 rounded hover:bg-blue-600"
-              >
-                Book Appointment
+              <Link to={`/patient/book/${doctor.id}`} className="mt-3 block text-center bg-blue-500 text-white py-2 rounded hover:bg-blue-600">
+                Request Appointment
               </Link>
             </div>
           ))}
@@ -84,94 +71,59 @@ const DoctorList = () => {
   )
 }
 
-// Book Appointment Component
 const BookAppointment = () => {
   const navigate = useNavigate()
   const [doctorId, setDoctorId] = useState('')
   const [doctor, setDoctor] = useState<any>(null)
   const [selectedDate, setSelectedDate] = useState('')
-  const [selectedTime, setSelectedTime] = useState('')
-  const [availableSlots, setAvailableSlots] = useState<string[]>([])
+  const [selectedTime, setSelectedTime] = useState('09:00')
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     const initDoctor = async () => {
-      // Get doctor ID from URL
       const pathParts = window.location.pathname.split('/')
       const id = pathParts[pathParts.length - 1]
       setDoctorId(id)
-      
+
       const { data } = await supabase
-        .from('doctors')
-        .select('*, profiles(full_name)')
+        .from('users')
+        .select('id, full_name, specialty, consultation_fee, available_days, available_time_start, available_time_end')
         .eq('id', id)
-        .single()
+        .eq('role', 'doctor')
+        .maybeSingle()
+
       if (data) setDoctor(data)
     }
     initDoctor()
   }, [])
 
-  useEffect(() => {
-    if (!selectedDate || !doctorId) {
-      return
-    }
-
-    const loadAvailableSlots = async () => {
-      const { data: slots, error } = await supabase
-        .from('time_slots')
-        .select('slot_time')
-        .eq('doctor_id', doctorId)
-        .eq('slot_date', selectedDate)
-        .eq('is_available', true)
-        .order('slot_time', { ascending: true })
-
-      if (error) {
-        setAvailableSlots([])
-        return
-      }
-
-      setAvailableSlots((slots || []).map((slot) => String(slot.slot_time)))
-    }
-
-    loadAvailableSlots()
-  }, [selectedDate, doctorId])
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedTime) {
-      toast.error('Please select a time slot')
+
+    if (!reason.trim()) {
+      toast.error('Please enter reason for visit')
       return
     }
 
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
 
-    const { data: appointment, error } = await supabase
+    const { error } = await supabase
       .from('appointments')
       .insert({
         patient_id: user?.id,
         doctor_id: doctorId,
         appointment_date: selectedDate,
-        appointment_time: selectedTime,
-        reason: reason,
+        appointment_time: `${selectedTime}:00`,
+        reason: reason.trim(),
         status: 'pending'
       })
-      .select('id')
-      .single()
 
     if (error) {
-      toast.error('Failed to book appointment: ' + error.message)
+      toast.error('Failed to request appointment: ' + error.message)
     } else {
-      await supabase
-        .from('time_slots')
-        .update({ is_available: false, appointment_id: appointment?.id })
-        .eq('doctor_id', doctorId)
-        .eq('slot_date', selectedDate)
-        .eq('slot_time', selectedTime)
-        .eq('is_available', true)
-
-      toast.success('Appointment booked successfully!')
+      toast.success('Appointment request sent. Waiting for admin approval.')
       navigate('/patient/appointments')
     }
     setLoading(false)
@@ -181,11 +133,14 @@ const BookAppointment = () => {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6">Book Appointment</h2>
+      <h2 className="text-2xl font-bold mb-6">Request Appointment</h2>
       <div className="bg-gray-50 rounded-lg p-4 mb-6">
-        <p className="font-semibold">Dr. {doctor.profiles?.full_name}</p>
+        <p className="font-semibold">Dr. {doctor.full_name}</p>
         <p className="text-gray-600">{doctor.specialty}</p>
-        <p className="text-green-600 font-bold mt-2">${doctor.consultation_fee}</p>
+        <p className="text-green-600 font-bold mt-2">${doctor.consultation_fee || 0}</p>
+        {doctor.available_days?.length ? (
+          <p className="text-sm text-gray-600 mt-2">Available: {doctor.available_days.join(', ')}</p>
+        ) : null}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -201,30 +156,16 @@ const BookAppointment = () => {
           />
         </div>
 
-        {selectedDate && (
-          <div>
-            <label className="block mb-2 font-medium">Select Time</label>
-            <div className="grid grid-cols-4 gap-2">
-              {availableSlots.map((time) => (
-                <button
-                  key={time}
-                  type="button"
-                  onClick={() => setSelectedTime(time)}
-                  className={`p-2 border rounded-lg text-center ${
-                    selectedTime === time
-                      ? 'bg-blue-500 text-white'
-                      : 'hover:bg-gray-100'
-                  }`}
-                >
-                  {time.slice(0, 5)}
-                </button>
-              ))}
-            </div>
-            {availableSlots.length === 0 && (
-              <p className="text-red-500 text-sm mt-2">No available slots for this date</p>
-            )}
-          </div>
-        )}
+        <div>
+          <label className="block mb-2 font-medium">Select Time</label>
+          <input
+            type="time"
+            className="w-full border rounded-lg p-2"
+            value={selectedTime}
+            onChange={(e) => setSelectedTime(e.target.value)}
+            required
+          />
+        </div>
 
         <div>
           <label className="block mb-2 font-medium">Reason for Visit</label>
@@ -234,22 +175,22 @@ const BookAppointment = () => {
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Describe your symptoms or reason for visit..."
+            required
           />
         </div>
 
         <button
           type="submit"
-          disabled={loading || !selectedTime}
+          disabled={loading}
           className="w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 disabled:opacity-50"
         >
-          {loading ? 'Booking...' : 'Confirm Appointment'}
+          {loading ? 'Submitting...' : 'Submit Request'}
         </button>
       </form>
     </div>
   )
 }
 
-// My Appointments Component
 const MyAppointments = () => {
   const [appointments, setAppointments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -260,11 +201,7 @@ const MyAppointments = () => {
       .from('appointments')
       .select(`
         *,
-        doctor:doctors(
-          specialty,
-          consultation_fee,
-          profiles(full_name)
-        )
+        doctor:users!doctor_id(full_name, specialty, consultation_fee)
       `)
       .eq('patient_id', user?.id)
       .order('appointment_date', { ascending: true })
@@ -278,46 +215,39 @@ const MyAppointments = () => {
   }, [])
 
   const cancelAppointment = async (id: string) => {
+    const { data: { user } } = await supabase.auth.getUser()
     const { error } = await supabase
       .from('appointments')
-      .update({ status: 'cancelled' })
+      .update({
+        status: 'cancelled',
+        cancelled_by: user?.id,
+        cancelled_at: new Date().toISOString(),
+        cancellation_reason: 'Cancelled by patient'
+      })
       .eq('id', id)
+      .eq('status', 'pending')
 
     if (error) {
       toast.error('Failed to cancel appointment')
     } else {
-      const cancelled = appointments.find((apt) => apt.id === id)
-      if (cancelled) {
-        await supabase
-          .from('time_slots')
-          .update({ is_available: true, appointment_id: null })
-          .eq('doctor_id', cancelled.doctor_id)
-          .eq('slot_date', cancelled.appointment_date)
-          .eq('slot_time', cancelled.appointment_time)
-          .eq('appointment_id', id)
-      }
-
       toast.success('Appointment cancelled')
       fetchAppointments()
     }
   }
 
   const getStatusColor = (status: string) => {
-    switch(status) {
-      case 'confirmed': return 'bg-green-100 text-green-800'
+    switch (status) {
+      case 'approved': return 'bg-green-100 text-green-800'
       case 'pending': return 'bg-yellow-100 text-yellow-800'
-      case 'cancelled': return 'bg-red-100 text-red-800'
-      case 'completed':
-      case 'checked': return 'bg-blue-100 text-blue-800'
-      case 'not_checked': return 'bg-orange-100 text-orange-800'
+      case 'rejected': return 'bg-red-100 text-red-800'
+      case 'cancelled': return 'bg-gray-100 text-gray-800'
+      case 'completed': return 'bg-blue-100 text-blue-800'
       default: return 'bg-gray-100 text-gray-800'
     }
   }
 
-  const getStatusLabel = (status: string, notes?: string) => {
-    if (status === 'cancelled' && notes?.startsWith('Admin rejection reason:')) return 'rejected'
-    if (status === 'completed' || status === 'checked') return 'checked'
-    if (status === 'not_checked') return 'not checked'
+  const getStatusLabel = (status: string) => {
+    if (status === 'completed') return 'checked'
     return status
   }
 
@@ -327,18 +257,14 @@ const MyAppointments = () => {
     <div>
       <h2 className="text-2xl font-bold mb-6">My Appointments History</h2>
       {appointments.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          No appointments found. Book your first appointment!
-        </div>
+        <div className="text-center py-8 text-gray-500">No appointments found. Book your first appointment!</div>
       ) : (
         <div className="space-y-4">
           {appointments.map((apt) => (
             <div key={apt.id} className="border rounded-lg p-4 hover:shadow-md transition">
               <div className="flex justify-between items-start">
                 <div>
-                  <h3 className="font-semibold text-lg">
-                    Dr. {apt.doctor?.profiles?.full_name}
-                  </h3>
+                  <h3 className="font-semibold text-lg">Dr. {apt.doctor?.full_name}</h3>
                   <p className="text-gray-600">{apt.doctor?.specialty}</p>
                   <p className="text-sm mt-2">
                     <strong>Date:</strong> {format(new Date(apt.appointment_date), 'MMMM dd, yyyy')}
@@ -346,30 +272,29 @@ const MyAppointments = () => {
                     <strong>Time:</strong> {apt.appointment_time}
                   </p>
                   {apt.reason && (
-                    <p className="text-sm text-gray-600 mt-2">
-                      <strong>Reason:</strong> {apt.reason}
-                    </p>
+                    <p className="text-sm text-gray-600 mt-2"><strong>Reason:</strong> {apt.reason}</p>
+                  )}
+                  {apt.rejection_reason && (
+                    <p className="text-sm text-red-600 mt-2"><strong>Rejection:</strong> {apt.rejection_reason}</p>
+                  )}
+                  {apt.cancellation_reason && (
+                    <p className="text-sm text-red-600 mt-2"><strong>Cancellation:</strong> {apt.cancellation_reason}</p>
                   )}
                 </div>
                 <div className="text-right">
                   <span className={`px-2 py-1 rounded text-sm ${getStatusColor(apt.status)}`}>
-                    {getStatusLabel(apt.status, apt.notes)}
+                    {getStatusLabel(apt.status)}
                   </span>
                   {apt.status === 'pending' && (
                     <button
                       onClick={() => cancelAppointment(apt.id)}
                       className="block mt-2 text-sm text-red-600 hover:text-red-800"
                     >
-                      Cancel
+                      Cancel Request
                     </button>
                   )}
                 </div>
               </div>
-              {apt.notes && (
-                <p className="text-sm text-red-600 mt-2">
-                  <strong>Update:</strong> {apt.notes}
-                </p>
-              )}
             </div>
           ))}
         </div>
@@ -378,7 +303,6 @@ const MyAppointments = () => {
   )
 }
 
-// Main Patient Dashboard
 export const PatientDashboard = () => {
   const navigate = useNavigate()
   const [user, setUser] = useState<any>(null)
@@ -399,35 +323,24 @@ export const PatientDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Navigation */}
       <nav className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center space-x-8">
               <h1 className="text-xl font-bold text-gray-900">Patient Portal</h1>
               <div className="flex space-x-4">
-                <Link to="/patient" className="text-gray-700 hover:text-gray-900 px-3 py-2">
-                  Find Doctors
-                </Link>
-                <Link to="/patient/appointments" className="text-gray-700 hover:text-gray-900 px-3 py-2">
-                  My Appointments
-                </Link>
+                <Link to="/patient" className="text-gray-700 hover:text-gray-900 px-3 py-2">Find Doctors</Link>
+                <Link to="/patient/appointments" className="text-gray-700 hover:text-gray-900 px-3 py-2">My Appointments</Link>
               </div>
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-600">Welcome, {user?.email}</span>
-              <button
-                onClick={handleLogout}
-                className="bg-red-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-600"
-              >
-                Logout
-              </button>
+              <button onClick={handleLogout} className="bg-red-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-600">Logout</button>
             </div>
           </div>
         </div>
       </nav>
 
-      {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Routes>
           <Route path="/" element={<DoctorList />} />

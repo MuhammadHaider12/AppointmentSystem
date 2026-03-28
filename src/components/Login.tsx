@@ -164,22 +164,28 @@ export const Login = () => {
                   required={selectedRole === 'doctor'}
                 />
                 <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="number"
-                    min={0}
-                    value={doctorForm.experience_years}
-                    onChange={(e) => setDoctorForm({ ...doctorForm, experience_years: parseInt(e.target.value, 10) || 0 })}
-                    className="w-full border border-gray-300 rounded-lg p-2"
-                    placeholder="Experience (years)"
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    value={doctorForm.consultation_fee}
-                    onChange={(e) => setDoctorForm({ ...doctorForm, consultation_fee: parseInt(e.target.value, 10) || 0 })}
-                    className="w-full border border-gray-300 rounded-lg p-2"
-                    placeholder="Fee"
-                  />
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Experience (Years)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={doctorForm.experience_years}
+                      onChange={(e) => setDoctorForm({ ...doctorForm, experience_years: parseInt(e.target.value, 10) || 0 })}
+                      className="w-full border border-gray-300 rounded-lg p-2"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Consultation Fee</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={doctorForm.consultation_fee}
+                      onChange={(e) => setDoctorForm({ ...doctorForm, consultation_fee: parseInt(e.target.value, 10) || 0 })}
+                      className="w-full border border-gray-300 rounded-lg p-2"
+                      placeholder="0"
+                    />
+                  </div>
                 </div>
                 <textarea
                   value={doctorForm.bio}
