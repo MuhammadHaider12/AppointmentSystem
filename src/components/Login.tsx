@@ -5,12 +5,27 @@ import toast from 'react-hot-toast'
 
 type SignupRole = 'patient' | 'doctor'
 
+type DoctorSignupForm = {
+  phone: string
+  specialty: string
+  experience_years: number
+  consultation_fee: number
+  bio: string
+}
+
 export const Login = () => {
   const navigate = useNavigate()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [selectedRole, setSelectedRole] = useState<SignupRole>('patient')
+  const [doctorForm, setDoctorForm] = useState<DoctorSignupForm>({
+    phone: '',
+    specialty: '',
+    experience_years: 0,
+    consultation_fee: 0,
+    bio: ''
+  })
   const [loading, setLoading] = useState(false)
   const [isLogin, setIsLogin] = useState(true)
 
@@ -38,13 +53,24 @@ export const Login = () => {
       }
     } else {
       // SIGNUP - Public signup is only for patients and doctors
+      if (selectedRole === 'doctor' && !doctorForm.specialty.trim()) {
+        toast.error('Please enter your specialty')
+        setLoading(false)
+        return
+      }
+
       const { error } = await supabase.auth.signUp({ 
         email, 
         password,
         options: {
           data: {
             full_name: fullName.trim(),
-            role: selectedRole
+            role: selectedRole,
+            phone: doctorForm.phone.trim() || null,
+            specialty: selectedRole === 'doctor' ? doctorForm.specialty.trim() : null,
+            experience_years: selectedRole === 'doctor' ? doctorForm.experience_years : null,
+            consultation_fee: selectedRole === 'doctor' ? doctorForm.consultation_fee : null,
+            bio: selectedRole === 'doctor' ? doctorForm.bio.trim() : null
           }
         }
       })
@@ -54,6 +80,13 @@ export const Login = () => {
       } else {
         toast.success('Account created successfully! Please login.')
         setFullName('')
+        setDoctorForm({
+          phone: '',
+          specialty: '',
+          experience_years: 0,
+          consultation_fee: 0,
+          bio: ''
+        })
         setIsLogin(true) // Switch to login form
       }
     }
@@ -111,6 +144,53 @@ export const Login = () => {
                 </button>
               ))}
             </div>
+
+            {selectedRole === 'doctor' && (
+              <div className="space-y-3 border rounded-lg p-3 bg-blue-50/50">
+                <p className="text-sm font-medium text-gray-700">Doctor Profile Basics</p>
+                <input
+                  type="text"
+                  value={doctorForm.phone}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, phone: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg p-2"
+                  placeholder="Phone Number"
+                />
+                <input
+                  type="text"
+                  value={doctorForm.specialty}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, specialty: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg p-2"
+                  placeholder="Specialty (required)"
+                  required={selectedRole === 'doctor'}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    value={doctorForm.experience_years}
+                    onChange={(e) => setDoctorForm({ ...doctorForm, experience_years: parseInt(e.target.value, 10) || 0 })}
+                    className="w-full border border-gray-300 rounded-lg p-2"
+                    placeholder="Experience (years)"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    value={doctorForm.consultation_fee}
+                    onChange={(e) => setDoctorForm({ ...doctorForm, consultation_fee: parseInt(e.target.value, 10) || 0 })}
+                    className="w-full border border-gray-300 rounded-lg p-2"
+                    placeholder="Fee"
+                  />
+                </div>
+                <textarea
+                  value={doctorForm.bio}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, bio: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg p-2"
+                  rows={2}
+                  placeholder="Short bio"
+                />
+                <p className="text-xs text-gray-500">You can update these details later from Doctor Profile.</p>
+              </div>
+            )}
           </div>
         )}
 

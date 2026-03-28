@@ -230,7 +230,9 @@ const ManageDoctors = () => {
   const [saving, setSaving] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
   const [formData, setFormData] = useState({
+    full_name: '',
     email: '',
+    phone: '',
     specialty: '',
     experience_years: 0,
     consultation_fee: 0,
@@ -244,7 +246,7 @@ const ManageDoctors = () => {
   const fetchDoctors = async () => {
     const { data, error } = await supabase
       .from('users')
-      .select('id, full_name, email, specialty, experience_years, consultation_fee, bio, is_active')
+      .select('id, full_name, email, phone, specialty, experience_years, consultation_fee, bio, is_active')
       .eq('role', 'doctor')
       .order('created_at', { ascending: false })
 
@@ -274,14 +276,22 @@ const ManageDoctors = () => {
       return
     }
 
+    if (!formData.specialty.trim()) {
+      toast.error('Specialty is required')
+      setSaving(false)
+      return
+    }
+
     const { error: updateError } = await supabase
       .from('users')
       .update({
         role: 'doctor',
-        specialty: formData.specialty,
+        full_name: formData.full_name.trim() || null,
+        phone: formData.phone.trim() || null,
+        specialty: formData.specialty.trim(),
         experience_years: formData.experience_years,
         consultation_fee: formData.consultation_fee,
-        bio: formData.bio,
+        bio: formData.bio.trim() || null,
         is_active: true
       })
       .eq('id', user.id)
@@ -291,7 +301,7 @@ const ManageDoctors = () => {
     } else {
       toast.success('Doctor profile saved successfully')
       setShowAddForm(false)
-      setFormData({ email: '', specialty: '', experience_years: 0, consultation_fee: 0, bio: '' })
+      setFormData({ full_name: '', email: '', phone: '', specialty: '', experience_years: 0, consultation_fee: 0, bio: '' })
       fetchDoctors()
     }
 
@@ -332,12 +342,26 @@ const ManageDoctors = () => {
             <h3 className="text-xl font-bold mb-4">Add New Doctor</h3>
             <form onSubmit={addDoctor} className="space-y-3">
               <input
+                type="text"
+                placeholder="Doctor full name"
+                className="w-full border rounded p-2"
+                value={formData.full_name}
+                onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+              />
+              <input
                 type="email"
                 placeholder="Doctor account email"
                 className="w-full border rounded p-2"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
+              />
+              <input
+                type="text"
+                placeholder="Phone Number"
+                className="w-full border rounded p-2"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
               />
               <input
                 type="text"
@@ -395,6 +419,7 @@ const ManageDoctors = () => {
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Doctor</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Specialty</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Experience</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fee</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
@@ -411,6 +436,7 @@ const ManageDoctors = () => {
                   </div>
                 </td>
                 <td className="px-6 py-4">{doctor.specialty}</td>
+                <td className="px-6 py-4">{doctor.phone || '-'}</td>
                 <td className="px-6 py-4">{doctor.experience_years || 0} years</td>
                 <td className="px-6 py-4">${doctor.consultation_fee || 0}</td>
                 <td className="px-6 py-4">
