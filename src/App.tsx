@@ -13,45 +13,76 @@ function App() {
   const [userRole, setUserRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session)
-      if (session?.user) {
-        await fetchUserRole(session.user.id)
-      }
-      setLoading(false)
-    })
+  const fetchUserRole = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single()
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      if (!error && data) {
+        setUserRole(data.role)
+      } else {
+        setUserRole(null)
+      }
+    } catch {
+      setUserRole(null)
+    }
+  }
+
+  useEffect(() => {
+    let isMounted = true
+
+    const initAuth = async () => {
+      try {
+        // Get initial session
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!isMounted) return
+
         setSession(session)
         if (session?.user) {
           await fetchUserRole(session.user.id)
         } else {
           setUserRole(null)
         }
-        setLoading(false)
+      } catch {
+        if (!isMounted) return
+        setSession(null)
+        setUserRole(null)
+      } finally {
+        if (isMounted) setLoading(false)
+      }
+    }
+
+    initAuth()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        try {
+          if (!isMounted) return
+
+          setSession(session)
+          if (session?.user) {
+            await fetchUserRole(session.user.id)
+          } else {
+            setUserRole(null)
+          }
+        } catch {
+          if (!isMounted) return
+          setUserRole(null)
+        } finally {
+          if (isMounted) setLoading(false)
+        }
       }
     )
 
-    return () => subscription.unsubscribe()
-  }, [])
-
-  const fetchUserRole = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', userId)
-      .single()
-    
-    if (!error && data) {
-      setUserRole(data.role)
-    } else {
-      setUserRole(null)
+    return () => {
+      isMounted = false
+      subscription.unsubscribe()
     }
-  }
+  }, [])
 
   if (loading) {
     return (
@@ -95,6 +126,7 @@ function App() {
         } />
         
         <Route path="/" element={<Navigate to={session ? getDashboardPath() : '/login'} />} />
+        <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>
   )
