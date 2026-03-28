@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Link, Routes, Route, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
@@ -9,7 +9,7 @@ const TodayAppointments = () => {
   const [appointments, setAppointments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  const fetchTodayAppointments = async () => {
+  const fetchTodayAppointments = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     const today = format(new Date(), 'yyyy-MM-dd')
 
@@ -25,11 +25,11 @@ const TodayAppointments = () => {
 
     if (!error && data) setAppointments(data)
     setLoading(false)
-  }
+  }, [])
 
   useEffect(() => {
     fetchTodayAppointments()
-  }, [])
+  }, [fetchTodayAppointments])
 
   const updateStatus = async (id: string, status: string) => {
     const { error } = await supabase
@@ -197,32 +197,35 @@ const AllAppointments = () => {
 const AvailabilityManager = () => {
   const [availability, setAvailability] = useState<any[]>([])
   const [newSlot, setNewSlot] = useState({
-    day_of_week: 1,
-    start_time: '09:00',
-    end_time: '17:00'
+    slot_date: format(new Date(), 'yyyy-MM-dd'),
+    slot_time: '09:00:00'
   })
 
-  const fetchAvailability = async () => {
+  const fetchAvailability = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     const { data } = await supabase
-      .from('doctor_availability')
+      .from('time_slots')
       .select('*')
       .eq('doctor_id', user?.id)
+      .order('slot_date', { ascending: true })
+      .order('slot_time', { ascending: true })
     
     if (data) setAvailability(data)
-  }
+  }, [])
 
   useEffect(() => {
     fetchAvailability()
-  }, [])
+  }, [fetchAvailability])
 
   const addAvailability = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     const { error } = await supabase
-      .from('doctor_availability')
+      .from('time_slots')
       .insert({
         doctor_id: user?.id,
-        ...newSlot
+        slot_date: newSlot.slot_date,
+        slot_time: newSlot.slot_time,
+        is_available: true
       })
 
     if (error) {
@@ -233,34 +236,38 @@ const AvailabilityManager = () => {
     }
   }
 
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+  const removeAvailability = async (id: string) => {
+    const { error } = await supabase
+      .from('time_slots')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      toast.error('Failed to remove slot')
+    } else {
+      toast.success('Slot removed')
+      fetchAvailability()
+    }
+  }
 
   return (
     <div>
       <h2 className="text-2xl font-bold mb-6">Manage Availability</h2>
       
       <div className="bg-gray-50 rounded-lg p-4 mb-6">
-        <h3 className="font-semibold mb-3">Add New Availability Slot</h3>
-        <div className="grid grid-cols-3 gap-3">
-          <select
-            className="border rounded p-2"
-            value={newSlot.day_of_week}
-            onChange={(e) => setNewSlot({...newSlot, day_of_week: parseInt(e.target.value)})}
-          >
-            {days.map((day, idx) => (
-              <option key={idx} value={idx}>{day}</option>
-            ))}
-          </select>
+        <h3 className="font-semibold mb-3">Add Available Slot</h3>
+        <div className="grid grid-cols-2 gap-3">
           <input
-            type="time"
-            value={newSlot.start_time}
-            onChange={(e) => setNewSlot({...newSlot, start_time: e.target.value})}
+            type="date"
+            value={newSlot.slot_date}
+            onChange={(e) => setNewSlot({ ...newSlot, slot_date: e.target.value })}
             className="border rounded p-2"
+            min={format(new Date(), 'yyyy-MM-dd')}
           />
           <input
             type="time"
-            value={newSlot.end_time}
-            onChange={(e) => setNewSlot({...newSlot, end_time: e.target.value})}
+            value={newSlot.slot_time.slice(0, 5)}
+            onChange={(e) => setNewSlot({ ...newSlot, slot_time: `${e.target.value}:00` })}
             className="border rounded p-2"
           />
         </div>
@@ -275,8 +282,16 @@ const AvailabilityManager = () => {
       <div className="space-y-2">
         {availability.map((slot) => (
           <div key={slot.id} className="border rounded p-3 flex justify-between">
-            <span>{days[slot.day_of_week]}: {slot.start_time} - {slot.end_time}</span>
-            <button className="text-red-500 text-sm">Remove</button>
+            <span>
+              {format(new Date(slot.slot_date), 'MMM dd, yyyy')}: {String(slot.slot_time).slice(0, 5)}
+              {!slot.is_available && ' (booked)'}
+            </span>
+            <button
+              onClick={() => removeAvailability(slot.id)}
+              className="text-red-500 text-sm"
+            >
+              Remove
+            </button>
           </div>
         ))}
       </div>
@@ -289,14 +304,14 @@ export const DoctorDashboard = () => {
   const navigate = useNavigate()
   const [user, setUser] = useState<any>(null)
 
-  useEffect(() => {
-    getUser()
-  }, [])
-
-  const getUser = async () => {
+  const getUser = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     setUser(user)
-  }
+  }, [])
+
+  useEffect(() => {
+    getUser()
+  }, [getUser])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()

@@ -33,11 +33,15 @@ const DashboardStats = () => {
     // Get appointments stats
     const { data: appointments } = await supabase
       .from('appointments')
-      .select('status, amount')
+      .select('status, doctor:doctors!doctor_id(consultation_fee)')
 
     const totalAppointments = appointments?.length || 0
     const pendingAppointments = appointments?.filter(a => a.status === 'pending').length || 0
-    const totalRevenue = appointments?.reduce((sum, a) => sum + (a.amount || 0), 0) || 0
+    const totalRevenue = appointments?.reduce((sum, a) => {
+      const doctor = Array.isArray(a.doctor) ? a.doctor[0] : a.doctor
+      const fee = Number(doctor?.consultation_fee || 0)
+      return sum + fee
+    }, 0) || 0
 
     setStats({
       totalPatients: patients || 0,

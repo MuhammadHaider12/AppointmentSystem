@@ -104,7 +104,7 @@ const BookAppointment = () => {
       
       const { data } = await supabase
         .from('doctors')
-        .select('*, profiles(full_name, specialty)')
+        .select('*, profiles(full_name)')
         .eq('id', id)
         .single()
       if (data) setDoctor(data)
@@ -118,24 +118,20 @@ const BookAppointment = () => {
     }
 
     const loadAvailableSlots = async () => {
-      // Generate time slots (9 AM to 5 PM)
-      const slots = []
-      for (let hour = 9; hour <= 17; hour++) {
-        slots.push(`${hour.toString().padStart(2, '0')}:00`)
-        if (hour !== 17) slots.push(`${hour.toString().padStart(2, '0')}:30`)
+      const { data: slots, error } = await supabase
+        .from('time_slots')
+        .select('slot_time')
+        .eq('doctor_id', doctorId)
+        .eq('slot_date', selectedDate)
+        .eq('is_available', true)
+        .order('slot_time', { ascending: true })
+
+      if (error) {
+        setAvailableSlots([])
+        return
       }
 
-      // Get booked slots
-      const { data: booked } = await supabase
-        .from('appointments')
-        .select('appointment_time')
-        .eq('doctor_id', doctorId)
-        .eq('appointment_date', selectedDate)
-        .not('status', 'eq', 'cancelled')
-
-      const bookedTimes = booked?.map(b => b.appointment_time) || []
-      const available = slots.filter(slot => !bookedTimes.includes(slot))
-      setAvailableSlots(available)
+      setAvailableSlots((slots || []).map((slot) => String(slot.slot_time)))
     }
 
     loadAvailableSlots()
@@ -151,7 +147,7 @@ const BookAppointment = () => {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
 
-    const { error } = await supabase
+    const { data: appointment, error } = await supabase
       .from('appointments')
       .insert({
         patient_id: user?.id,
@@ -161,10 +157,20 @@ const BookAppointment = () => {
         reason: reason,
         status: 'pending'
       })
+      .select('id')
+      .single()
 
     if (error) {
       toast.error('Failed to book appointment: ' + error.message)
     } else {
+      await supabase
+        .from('time_slots')
+        .update({ is_available: false, appointment_id: appointment?.id })
+        .eq('doctor_id', doctorId)
+        .eq('slot_date', selectedDate)
+        .eq('slot_time', selectedTime)
+        .eq('is_available', true)
+
       toast.success('Appointment booked successfully!')
       navigate('/patient/appointments')
     }
@@ -210,7 +216,7 @@ const BookAppointment = () => {
                       : 'hover:bg-gray-100'
                   }`}
                 >
-                  {time}
+                  {time.slice(0, 5)}
                 </button>
               ))}
             </div>
@@ -280,6 +286,17 @@ const MyAppointments = () => {
     if (error) {
       toast.error('Failed to cancel appointment')
     } else {
+      const cancelled = appointments.find((apt) => apt.id === id)
+      if (cancelled) {
+        await supabase
+          .from('time_slots')
+          .update({ is_available: true, appointment_id: null })
+          .eq('doctor_id', cancelled.doctor_id)
+          .eq('slot_date', cancelled.appointment_date)
+          .eq('slot_time', cancelled.appointment_time)
+          .eq('appointment_id', id)
+      }
+
       toast.success('Appointment cancelled')
       fetchAppointments()
     }
