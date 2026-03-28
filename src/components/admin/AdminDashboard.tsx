@@ -440,6 +440,18 @@ const ManageAppointments = ({ defaultFilter = 'all' }: { defaultFilter?: string 
   const [loading, setLoading] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [filter, setFilter] = useState(defaultFilter)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [patients, setPatients] = useState<any[]>([])
+  const [doctors, setDoctors] = useState<any[]>([])
+  const [formData, setFormData] = useState({
+    patient_id: '',
+    doctor_id: '',
+    appointment_date: '',
+    appointment_time: '09:00',
+    reason: '',
+    status: 'approved'
+  })
 
   const fetchAppointments = useCallback(async () => {
     let query = supabase
@@ -464,6 +476,76 @@ const ManageAppointments = ({ defaultFilter = 'all' }: { defaultFilter?: string 
   useEffect(() => {
     fetchAppointments()
   }, [fetchAppointments])
+
+  const openAddAppointment = async () => {
+    const [{ data: patientsData }, { data: doctorsData }] = await Promise.all([
+      supabase
+        .from('users')
+        .select('id, full_name, email')
+        .eq('role', 'patient')
+        .eq('is_active', true)
+        .order('full_name', { ascending: true }),
+      supabase
+        .from('users')
+        .select('id, full_name, email')
+        .eq('role', 'doctor')
+        .eq('is_active', true)
+        .order('full_name', { ascending: true })
+    ])
+
+    setPatients(patientsData || [])
+    setDoctors(doctorsData || [])
+    setFormData({
+      patient_id: patientsData?.[0]?.id || '',
+      doctor_id: doctorsData?.[0]?.id || '',
+      appointment_date: '',
+      appointment_time: '09:00',
+      reason: '',
+      status: 'approved'
+    })
+    setShowAddForm(true)
+  }
+
+  const createAppointment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!formData.patient_id || !formData.doctor_id || !formData.appointment_date || !formData.reason.trim()) {
+      toast.error('Please fill all required fields')
+      return
+    }
+
+    setSaving(true)
+    const { data: authData } = await supabase.auth.getUser()
+    const isApproved = formData.status === 'approved'
+
+    const payload: any = {
+      patient_id: formData.patient_id,
+      doctor_id: formData.doctor_id,
+      appointment_date: formData.appointment_date,
+      appointment_time: `${formData.appointment_time}:00`,
+      reason: formData.reason.trim(),
+      status: formData.status
+    }
+
+    if (isApproved) {
+      payload.approved_by = authData.user?.id
+      payload.approved_at = new Date().toISOString()
+      payload.rejection_reason = null
+    }
+
+    const { error } = await supabase
+      .from('appointments')
+      .insert(payload)
+
+    if (error) {
+      toast.error('Failed to add appointment')
+    } else {
+      toast.success('Appointment added successfully')
+      setShowAddForm(false)
+      fetchAppointments()
+    }
+
+    setSaving(false)
+  }
 
   const updateAppointmentStatus = async (apt: any, status: 'approved' | 'rejected') => {
     setUpdatingId(apt.id)
@@ -526,19 +608,97 @@ const ManageAppointments = ({ defaultFilter = 'all' }: { defaultFilter?: string 
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Appointments</h2>
-        <select
-          className="border rounded-lg p-2"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        >
-          <option value="all">All</option>
-          <option value="pending">Pending Requests</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="completed">Completed</option>
-        </select>
+        <div className="flex gap-2">
+          <button
+            onClick={openAddAppointment}
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+          >
+            + Add Appointment
+          </button>
+          <select
+            className="border rounded-lg p-2"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          >
+            <option value="all">All</option>
+            <option value="pending">Pending Requests</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="completed">Completed</option>
+          </select>
+        </div>
       </div>
+
+      {showAddForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full">
+            <h3 className="text-xl font-bold mb-4">Add Appointment</h3>
+            <form onSubmit={createAppointment} className="space-y-3">
+              <select
+                className="w-full border rounded p-2"
+                value={formData.patient_id}
+                onChange={(e) => setFormData({ ...formData, patient_id: e.target.value })}
+                required
+              >
+                {patients.map((p) => (
+                  <option key={p.id} value={p.id}>{p.full_name} ({p.email})</option>
+                ))}
+              </select>
+              <select
+                className="w-full border rounded p-2"
+                value={formData.doctor_id}
+                onChange={(e) => setFormData({ ...formData, doctor_id: e.target.value })}
+                required
+              >
+                {doctors.map((d) => (
+                  <option key={d.id} value={d.id}>{d.full_name} ({d.email})</option>
+                ))}
+              </select>
+              <input
+                type="date"
+                className="w-full border rounded p-2"
+                value={formData.appointment_date}
+                onChange={(e) => setFormData({ ...formData, appointment_date: e.target.value })}
+                required
+              />
+              <input
+                type="time"
+                className="w-full border rounded p-2"
+                value={formData.appointment_time}
+                onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
+                required
+              />
+              <textarea
+                className="w-full border rounded p-2"
+                rows={3}
+                placeholder="Reason"
+                value={formData.reason}
+                onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                required
+              />
+              <select
+                className="w-full border rounded p-2"
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+              >
+                <option value="approved">Approved</option>
+                <option value="pending">Pending</option>
+              </select>
+
+              <div className="flex gap-2">
+                <button type="submit" disabled={saving} className="flex-1 bg-blue-500 text-white py-2 rounded disabled:opacity-50">
+                  {saving ? 'Saving...' : 'Add'}
+                </button>
+                <button type="button" onClick={() => setShowAddForm(false)} className="flex-1 bg-gray-300 py-2 rounded">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
