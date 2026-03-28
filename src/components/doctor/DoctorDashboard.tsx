@@ -202,17 +202,17 @@ const AvailabilityManager = () => {
     end_time: '17:00'
   })
 
-  useEffect(() => {
-    const fetchAvailability = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      const { data } = await supabase
-        .from('doctor_availability')
-        .select('*')
-        .eq('doctor_id', user?.id)
-      
-      if (data) setAvailability(data)
-    }
+  const fetchAvailability = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data } = await supabase
+      .from('doctor_availability')
+      .select('*')
+      .eq('doctor_id', user?.id)
+    
+    if (data) setAvailability(data)
+  }
 
+  useEffect(() => {
     fetchAvailability()
   }, [])
 
