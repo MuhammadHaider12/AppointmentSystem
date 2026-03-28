@@ -96,11 +96,14 @@ const BookAppointment = () => {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    // Get doctor ID from URL
-    const pathParts = window.location.pathname.split('/')
-    const id = pathParts[pathParts.length - 1]
-    setDoctorId(id)
-    fetchDoctor(id)
+    const initDoctor = async () => {
+      // Get doctor ID from URL
+      const pathParts = window.location.pathname.split('/')
+      const id = pathParts[pathParts.length - 1]
+      setDoctorId(id)
+      await fetchDoctor(id)
+    }
+    initDoctor()
   }, [])
 
   useEffect(() => {
@@ -249,10 +252,7 @@ const MyAppointments = () => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchAppointments()
-  }, [])
-
-  const fetchAppointments = async () => {
+    const fetchAppointments = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     const { data, error } = await supabase
       .from('appointments')
@@ -269,7 +269,10 @@ const MyAppointments = () => {
 
     if (!error && data) setAppointments(data)
     setLoading(false)
-  }
+    }
+
+    fetchAppointments()
+  }, [])
 
   const cancelAppointment = async (id: string) => {
     const { error } = await supabase

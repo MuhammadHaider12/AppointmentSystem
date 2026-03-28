@@ -10,10 +10,7 @@ const TodayAppointments = () => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchTodayAppointments()
-  }, [])
-
-  const fetchTodayAppointments = async () => {
+    const fetchTodayAppointments = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     const today = format(new Date(), 'yyyy-MM-dd')
 
@@ -29,7 +26,10 @@ const TodayAppointments = () => {
 
     if (!error && data) setAppointments(data)
     setLoading(false)
-  }
+    }
+
+    fetchTodayAppointments()
+  }, [])
 
   const updateStatus = async (id: string, status: string) => {
     const { error } = await supabase
@@ -203,10 +203,7 @@ const AvailabilityManager = () => {
   })
 
   useEffect(() => {
-    fetchAvailability()
-  }, [])
-
-  const fetchAvailability = async () => {
+    const fetchAvailability = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     const { data } = await supabase
       .from('doctor_availability')
@@ -214,7 +211,10 @@ const AvailabilityManager = () => {
       .eq('doctor_id', user?.id)
     
     if (data) setAvailability(data)
-  }
+    }
+
+    fetchAvailability()
+  }, [])
 
   const addAvailability = async () => {
     const { data: { user } } = await supabase.auth.getUser()
