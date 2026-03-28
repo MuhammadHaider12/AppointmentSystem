@@ -1,11 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Routes, Route, useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 
-const getSingleRelation = (value: any) => (Array.isArray(value) ? value[0] : value)
-
-// Dashboard Stats Component
 const DashboardStats = () => {
   const [stats, setStats] = useState({
     totalPatients: 0,
@@ -13,8 +10,7 @@ const DashboardStats = () => {
     totalAdmins: 0,
     totalAppointments: 0,
     pendingAppointments: 0,
-    pendingPatients: 0,
-    totalRevenue: 0
+    pendingPatients: 0
   })
 
   useEffect(() => {
@@ -23,37 +19,32 @@ const DashboardStats = () => {
 
   const fetchStats = async () => {
     const { count: patients } = await supabase
-      .from('profiles')
+      .from('users')
       .select('*', { count: 'exact', head: true })
       .eq('role', 'patient')
 
     const { count: doctors } = await supabase
-      .from('profiles')
+      .from('users')
       .select('*', { count: 'exact', head: true })
       .eq('role', 'doctor')
 
     const { count: admins } = await supabase
-      .from('profiles')
+      .from('users')
       .select('*', { count: 'exact', head: true })
       .eq('role', 'admin')
 
     const { data: appointments } = await supabase
       .from('appointments')
-      .select('patient_id, status, doctor:doctors!doctor_id(consultation_fee)')
+      .select('patient_id, status')
 
     const totalAppointments = appointments?.length || 0
     const pendingAppointments = appointments?.filter((a) => a.status === 'pending').length || 0
-    const pendingPatientIds = new Set(
+    const pendingPatients = new Set(
       (appointments || [])
         .filter((a) => a.status === 'pending')
         .map((a) => a.patient_id)
         .filter(Boolean)
-    )
-    const pendingPatients = pendingPatientIds.size
-    const totalRevenue = appointments?.reduce((sum, a) => {
-      const doctor = getSingleRelation(a.doctor)
-      return sum + Number(doctor?.consultation_fee || 0)
-    }, 0) || 0
+    ).size
 
     setStats({
       totalPatients: patients || 0,
@@ -61,8 +52,7 @@ const DashboardStats = () => {
       totalAdmins: admins || 0,
       totalAppointments,
       pendingAppointments,
-      pendingPatients,
-      totalRevenue
+      pendingPatients
     })
   }
 
@@ -72,12 +62,11 @@ const DashboardStats = () => {
     { title: 'Total Admins', value: stats.totalAdmins, icon: '🛡️', color: 'bg-slate-600' },
     { title: 'Total Appointments', value: stats.totalAppointments, icon: '📅', color: 'bg-purple-500' },
     { title: 'Pending Appointments', value: stats.pendingAppointments, icon: '⏳', color: 'bg-yellow-500' },
-    { title: 'Patients with Pending', value: stats.pendingPatients, icon: '🧾', color: 'bg-orange-500' },
-    { title: 'Total Revenue', value: `$${stats.totalRevenue}`, icon: '💰', color: 'bg-indigo-500' }
+    { title: 'Patients with Pending', value: stats.pendingPatients, icon: '🧾', color: 'bg-orange-500' }
   ]
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
       {statCards.map((stat, idx) => (
         <div key={idx} className="bg-white rounded-lg shadow p-4">
           <div className="flex items-center justify-between">
@@ -95,7 +84,6 @@ const DashboardStats = () => {
   )
 }
 
-// Manage Admins Component
 const ManageAdmins = () => {
   const [admins, setAdmins] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -109,7 +97,7 @@ const ManageAdmins = () => {
 
   const fetchAdmins = async () => {
     const { data, error } = await supabase
-      .from('profiles')
+      .from('users')
       .select('id, full_name, email, created_at')
       .eq('role', 'admin')
       .order('created_at', { ascending: false })
@@ -122,25 +110,25 @@ const ManageAdmins = () => {
     e.preventDefault()
     setSaving(true)
 
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
+    const { data: user, error: findError } = await supabase
+      .from('users')
       .select('id, role')
       .eq('email', email)
       .maybeSingle()
 
-    if (profileError) {
-      toast.error('Failed to find profile by email')
+    if (findError) {
+      toast.error('Failed to find user by email')
       setSaving(false)
       return
     }
 
-    if (!profile) {
+    if (!user) {
       toast.error('No user found with this email. Ask them to sign up first.')
       setSaving(false)
       return
     }
 
-    if (profile.role === 'admin') {
+    if (user.role === 'admin') {
       toast.success('User is already an admin')
       setSaving(false)
       setShowAddForm(false)
@@ -149,9 +137,9 @@ const ManageAdmins = () => {
     }
 
     const { error: updateError } = await supabase
-      .from('profiles')
+      .from('users')
       .update({ role: 'admin' })
-      .eq('id', profile.id)
+      .eq('id', user.id)
 
     if (updateError) {
       toast.error('Failed to promote user to admin')
@@ -192,9 +180,7 @@ const ManageAdmins = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
-              <p className="text-xs text-gray-500">
-                This promotes an existing signed-up user account to admin.
-              </p>
+              <p className="text-xs text-gray-500">This promotes an existing user account to admin.</p>
               <div className="flex space-x-2">
                 <button
                   type="submit"
@@ -238,7 +224,6 @@ const ManageAdmins = () => {
   )
 }
 
-// Manage Doctors Component
 const ManageDoctors = () => {
   const [doctors, setDoctors] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -258,11 +243,9 @@ const ManageDoctors = () => {
 
   const fetchDoctors = async () => {
     const { data, error } = await supabase
-      .from('doctors')
-      .select(`
-        *,
-        profiles:profiles(full_name, email, phone)
-      `)
+      .from('users')
+      .select('id, full_name, email, specialty, experience_years, consultation_fee, bio, is_active')
+      .eq('role', 'doctor')
       .order('created_at', { ascending: false })
 
     if (!error && data) setDoctors(data)
@@ -273,60 +256,42 @@ const ManageDoctors = () => {
     e.preventDefault()
     setSaving(true)
 
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
+    const { data: user, error: findError } = await supabase
+      .from('users')
       .select('id, role')
       .eq('email', formData.email)
       .maybeSingle()
 
-    if (profileError) {
-      toast.error('Failed to find profile by email')
+    if (findError) {
+      toast.error('Failed to find user by email')
       setSaving(false)
       return
     }
 
-    if (!profile) {
+    if (!user) {
       toast.error('No user found with this email. Ask them to sign up first.')
       setSaving(false)
       return
     }
 
-    if (profile.role !== 'doctor') {
-      const { error: roleError } = await supabase
-        .from('profiles')
-        .update({ role: 'doctor' })
-        .eq('id', profile.id)
-
-      if (roleError) {
-        toast.error('Failed to update profile role to doctor')
-        setSaving(false)
-        return
-      }
-    }
-
-    const { error: doctorError } = await supabase
-      .from('doctors')
-      .upsert({
-        id: profile.id,
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({
+        role: 'doctor',
         specialty: formData.specialty,
         experience_years: formData.experience_years,
         consultation_fee: formData.consultation_fee,
         bio: formData.bio,
         is_active: true
-      }, { onConflict: 'id' })
+      })
+      .eq('id', user.id)
 
-    if (doctorError) {
+    if (updateError) {
       toast.error('Failed to save doctor details')
     } else {
       toast.success('Doctor profile saved successfully')
       setShowAddForm(false)
-      setFormData({
-        email: '',
-        specialty: '',
-        experience_years: 0,
-        consultation_fee: 0,
-        bio: ''
-      })
+      setFormData({ email: '', specialty: '', experience_years: 0, consultation_fee: 0, bio: '' })
       fetchDoctors()
     }
 
@@ -335,7 +300,7 @@ const ManageDoctors = () => {
 
   const toggleDoctorStatus = async (id: string, currentStatus: boolean) => {
     const { error } = await supabase
-      .from('doctors')
+      .from('users')
       .update({ is_active: !currentStatus })
       .eq('id', id)
 
@@ -374,9 +339,6 @@ const ManageDoctors = () => {
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
               />
-              <p className="text-xs text-gray-500">
-                Use an existing signed-up user email. This action links that user as a doctor.
-              </p>
               <input
                 type="text"
                 placeholder="Specialty"
@@ -444,17 +406,15 @@ const ManageDoctors = () => {
               <tr key={doctor.id}>
                 <td className="px-6 py-4">
                   <div>
-                    <div className="font-medium">{getSingleRelation(doctor.profiles)?.full_name}</div>
-                    <div className="text-sm text-gray-500">{getSingleRelation(doctor.profiles)?.email}</div>
+                    <div className="font-medium">{doctor.full_name}</div>
+                    <div className="text-sm text-gray-500">{doctor.email}</div>
                   </div>
                 </td>
                 <td className="px-6 py-4">{doctor.specialty}</td>
-                <td className="px-6 py-4">{doctor.experience_years} years</td>
-                <td className="px-6 py-4">${doctor.consultation_fee}</td>
+                <td className="px-6 py-4">{doctor.experience_years || 0} years</td>
+                <td className="px-6 py-4">${doctor.consultation_fee || 0}</td>
                 <td className="px-6 py-4">
-                  <span className={`px-2 py-1 rounded text-sm ${
-                    doctor.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>
+                  <span className={`px-2 py-1 rounded text-sm ${doctor.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                     {doctor.is_active ? 'Active' : 'Inactive'}
                   </span>
                 </td>
@@ -475,80 +435,110 @@ const ManageDoctors = () => {
   )
 }
 
-// Manage Appointments Component
-const ManageAppointments = () => {
+const ManageAppointments = ({ defaultFilter = 'all' }: { defaultFilter?: string }) => {
   const [appointments, setAppointments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [filter, setFilter] = useState(defaultFilter)
 
-  useEffect(() => {
-    fetchAppointments()
-  }, [])
-
-  const fetchAppointments = async () => {
-    const { data, error } = await supabase
+  const fetchAppointments = useCallback(async () => {
+    let query = supabase
       .from('appointments')
       .select(`
         *,
-        patient:profiles!patient_id(full_name, email),
-        doctor:doctors(specialty, profiles(full_name, email))
+        patient:users!patient_id(full_name, email),
+        doctor:users!doctor_id(full_name, email, specialty)
       `)
       .order('created_at', { ascending: false })
 
+    if (filter !== 'all') {
+      query = query.eq('status', filter)
+    }
+
+    const { data, error } = await query
+
     if (!error && data) setAppointments(data)
     setLoading(false)
-  }
+  }, [filter])
 
-  const updateAppointmentStatus = async (apt: any, status: string) => {
+  useEffect(() => {
+    fetchAppointments()
+  }, [fetchAppointments])
+
+  const updateAppointmentStatus = async (apt: any, status: 'approved' | 'rejected') => {
     setUpdatingId(apt.id)
 
-    let updatePayload: any = { status }
-    if (status === 'cancelled') {
+    const payload: any = {
+      status,
+      approved_by: (await supabase.auth.getUser()).data.user?.id,
+      approved_at: new Date().toISOString()
+    }
+
+    if (status === 'rejected') {
       const rejectionReason = window.prompt('Enter rejection reason for patient:')
       if (!rejectionReason || !rejectionReason.trim()) {
         toast.error('Rejection reason is required')
         setUpdatingId(null)
         return
       }
-      updatePayload = {
-        status: 'cancelled',
-        notes: `Admin rejection reason: ${rejectionReason.trim()}`
-      }
-    }
-
-    if (status === 'confirmed') {
-      updatePayload.notes = null
+      payload.rejection_reason = rejectionReason.trim()
+    } else {
+      payload.rejection_reason = null
     }
 
     const { error } = await supabase
       .from('appointments')
-      .update(updatePayload)
+      .update(payload)
       .eq('id', apt.id)
 
-    if (!error && status === 'cancelled') {
-      await supabase
-        .from('time_slots')
-        .update({ is_available: true, appointment_id: null })
-        .eq('doctor_id', apt.doctor_id)
-        .eq('slot_date', apt.appointment_date)
-        .eq('slot_time', apt.appointment_time)
-        .eq('appointment_id', apt.id)
-    }
-
     if (error) {
-      toast.error(`Failed to ${status === 'confirmed' ? 'accept' : 'reject'} appointment`)
+      toast.error(`Failed to ${status === 'approved' ? 'accept' : 'reject'} appointment`)
     } else {
-      toast.success(status === 'confirmed' ? 'Appointment accepted' : 'Appointment rejected')
+      toast.success(status === 'approved' ? 'Appointment accepted' : 'Appointment rejected')
       fetchAppointments()
     }
     setUpdatingId(null)
+  }
+
+  const statusBadge = (apt: any) => {
+    const s = apt.status
+    const classes =
+      s === 'approved'
+        ? 'bg-green-100 text-green-800'
+        : s === 'pending'
+          ? 'bg-yellow-100 text-yellow-800'
+          : s === 'completed'
+            ? 'bg-blue-100 text-blue-800'
+            : s === 'rejected'
+              ? 'bg-red-100 text-red-800'
+              : 'bg-gray-100 text-gray-800'
+
+    return (
+      <span className={`px-2 py-1 rounded text-sm ${classes}`}>
+        {s}
+      </span>
+    )
   }
 
   if (loading) return <div>Loading...</div>
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">All Appointments</h2>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold">Appointments</h2>
+        <select
+          className="border rounded-lg p-2"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        >
+          <option value="all">All</option>
+          <option value="pending">Pending Requests</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+          <option value="cancelled">Cancelled</option>
+          <option value="completed">Completed</option>
+        </select>
+      </div>
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -564,46 +554,24 @@ const ManageAppointments = () => {
           <tbody className="bg-white divide-y divide-gray-200">
             {appointments.map((apt) => (
               <tr key={apt.id}>
-                <td className="px-6 py-4">{getSingleRelation(apt.patient)?.full_name}</td>
-                <td className="px-6 py-4">{getSingleRelation(getSingleRelation(apt.doctor)?.profiles)?.full_name}</td>
-                <td className="px-6 py-4">{getSingleRelation(getSingleRelation(apt.doctor)?.profiles)?.email}</td>
+                <td className="px-6 py-4">{apt.patient?.full_name}</td>
+                <td className="px-6 py-4">{apt.doctor?.full_name}</td>
+                <td className="px-6 py-4">{apt.doctor?.email}</td>
                 <td className="px-6 py-4">{apt.appointment_date} at {apt.appointment_time}</td>
-                <td className="px-6 py-4">
-                  <span className={`px-2 py-1 rounded text-sm ${
-                    apt.status === 'confirmed'
-                      ? 'bg-green-100 text-green-800'
-                      : apt.status === 'pending'
-                        ? 'bg-yellow-100 text-yellow-800'
-                    : apt.status === 'completed' || apt.status === 'checked'
-                      ? 'bg-blue-100 text-blue-800'
-                    : apt.status === 'not_checked'
-                      ? 'bg-orange-100 text-orange-800'
-                    : apt.notes?.startsWith('Admin rejection reason:')
-                      ? 'bg-red-100 text-red-800'
-                        : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {apt.status === 'completed' || apt.status === 'checked'
-                      ? 'checked'
-                      : apt.status === 'not_checked'
-                        ? 'not checked'
-                      : apt.status === 'cancelled' && apt.notes?.startsWith('Admin rejection reason:')
-                        ? 'rejected'
-                        : apt.status}
-                  </span>
-                </td>
+                <td className="px-6 py-4">{statusBadge(apt)}</td>
                 <td className="px-6 py-4">
                   {apt.status === 'pending' ? (
                     <div className="flex gap-2">
                       <button
                         disabled={updatingId === apt.id}
-                        onClick={() => updateAppointmentStatus(apt, 'confirmed')}
+                        onClick={() => updateAppointmentStatus(apt, 'approved')}
                         className="bg-green-500 text-white px-3 py-1 rounded text-sm disabled:opacity-50"
                       >
                         {updatingId === apt.id ? 'Updating...' : 'Accept'}
                       </button>
                       <button
                         disabled={updatingId === apt.id}
-                        onClick={() => updateAppointmentStatus(apt, 'cancelled')}
+                        onClick={() => updateAppointmentStatus(apt, 'rejected')}
                         className="bg-red-500 text-white px-3 py-1 rounded text-sm disabled:opacity-50"
                       >
                         Reject
@@ -622,7 +590,6 @@ const ManageAppointments = () => {
   )
 }
 
-// Main Admin Dashboard
 export const AdminDashboard = () => {
   const navigate = useNavigate()
   const [user, setUser] = useState<any>(null)
@@ -649,28 +616,16 @@ export const AdminDashboard = () => {
             <div className="flex items-center space-x-8">
               <h1 className="text-xl font-bold text-gray-900">Admin Portal</h1>
               <div className="flex space-x-4">
-                <Link to="/admin" className="text-gray-700 hover:text-gray-900 px-3 py-2">
-                  Dashboard
-                </Link>
-                <Link to="/admin/admins" className="text-gray-700 hover:text-gray-900 px-3 py-2">
-                  Manage Admins
-                </Link>
-                <Link to="/admin/doctors" className="text-gray-700 hover:text-gray-900 px-3 py-2">
-                  Manage Doctors
-                </Link>
-                <Link to="/admin/appointments" className="text-gray-700 hover:text-gray-900 px-3 py-2">
-                  All Appointments
-                </Link>
+                <Link to="/admin" className="text-gray-700 hover:text-gray-900 px-3 py-2">Dashboard</Link>
+                <Link to="/admin/requests" className="text-gray-700 hover:text-gray-900 px-3 py-2">Requests</Link>
+                <Link to="/admin/admins" className="text-gray-700 hover:text-gray-900 px-3 py-2">Manage Admins</Link>
+                <Link to="/admin/doctors" className="text-gray-700 hover:text-gray-900 px-3 py-2">Manage Doctors</Link>
+                <Link to="/admin/appointments" className="text-gray-700 hover:text-gray-900 px-3 py-2">All Appointments</Link>
               </div>
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-600">Admin: {user?.email}</span>
-              <button
-                onClick={handleLogout}
-                className="bg-red-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-600"
-              >
-                Logout
-              </button>
+              <button onClick={handleLogout} className="bg-red-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-600">Logout</button>
             </div>
           </div>
         </div>
@@ -679,9 +634,10 @@ export const AdminDashboard = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Routes>
           <Route path="/" element={<DashboardStats />} />
+          <Route path="/requests" element={<ManageAppointments defaultFilter="pending" />} />
           <Route path="/admins" element={<ManageAdmins />} />
           <Route path="/doctors" element={<ManageDoctors />} />
-          <Route path="/appointments" element={<ManageAppointments />} />
+          <Route path="/appointments" element={<ManageAppointments defaultFilter="all" />} />
         </Routes>
       </div>
     </div>

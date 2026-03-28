@@ -7,6 +7,7 @@ type SignupRole = 'patient' | 'doctor'
 
 export const Login = () => {
   const navigate = useNavigate()
+  const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [selectedRole, setSelectedRole] = useState<SignupRole>('patient')
@@ -42,7 +43,7 @@ export const Login = () => {
         password,
         options: {
           data: {
-            full_name: email.split('@')[0],
+            full_name: fullName.trim(),
             role: selectedRole
           }
         }
@@ -52,6 +53,7 @@ export const Login = () => {
         toast.error(error.message)
       } else {
         toast.success('Account created successfully! Please login.')
+        setFullName('')
         setIsLogin(true) // Switch to login form
       }
     }
@@ -77,6 +79,17 @@ export const Login = () => {
         {/* Role Selection (only for signup) */}
         {!isLogin && (
           <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Full Name</label>
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Your full name"
+                required={!isLogin}
+              />
+            </div>
             <label className="block text-sm font-medium text-gray-700">I am a:</label>
             <div className="grid grid-cols-2 gap-3">
               {[
