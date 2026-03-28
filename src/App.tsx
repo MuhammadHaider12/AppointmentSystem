@@ -48,6 +48,8 @@ function App() {
     
     if (!error && data) {
       setUserRole(data.role)
+    } else {
+      setUserRole(null)
     }
   }
 
@@ -77,7 +79,7 @@ function App() {
       <Toaster position="top-right" />
       <Routes>
         <Route path="/login" element={
-          !session ? <Login /> : <Navigate to={getDashboardPath()} />
+          !session || !userRole ? <Login /> : <Navigate to={getDashboardPath()} />
         } />
         
         <Route path="/patient/*" element={

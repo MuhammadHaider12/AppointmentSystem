@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
 
-type Role = 'patient' | 'doctor' | 'admin'
+type SignupRole = 'patient' | 'doctor'
 
 export const Login = () => {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [selectedRole, setSelectedRole] = useState<Role>('patient')
+  const [selectedRole, setSelectedRole] = useState<SignupRole>('patient')
   const [loading, setLoading] = useState(false)
   const [isLogin, setIsLogin] = useState(true)
 
@@ -59,7 +59,7 @@ export const Login = () => {
         toast.success(`Welcome back, ${profile.role}!`)
       }
     } else {
-      // SIGNUP - Create account with selected role
+      // SIGNUP - Public signup is only for patients and doctors
       const { error } = await supabase.auth.signUp({ 
         email, 
         password,
@@ -101,19 +101,18 @@ export const Login = () => {
         {!isLogin && (
           <div className="space-y-3">
             <label className="block text-sm font-medium text-gray-700">I am a:</label>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               {[
-                { value: 'patient', label: 'Patient', icon: '👤', color: 'blue' },
-                { value: 'doctor', label: 'Doctor', icon: '👨‍⚕️', color: 'green' },
-                { value: 'admin', label: 'Admin', icon: '👑', color: 'purple' }
+                { value: 'patient', label: 'Patient', icon: '👤' },
+                { value: 'doctor', label: 'Doctor', icon: '👨‍⚕️' }
               ].map((role) => (
                 <button
                   key={role.value}
                   type="button"
-                  onClick={() => setSelectedRole(role.value as Role)}
+                  onClick={() => setSelectedRole(role.value as SignupRole)}
                   className={`p-3 rounded-lg border-2 transition-all ${
                     selectedRole === role.value
-                      ? `border-${role.color}-500 bg-${role.color}-50 text-${role.color}-700`
+                      ? 'border-red-500 bg-red-50 text-red-700'
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
