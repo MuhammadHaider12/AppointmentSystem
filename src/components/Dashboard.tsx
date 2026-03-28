@@ -46,16 +46,6 @@ const MyAppointments = () => {
   const [appointments, setAppointments] = useState<any[]>([])
   const [user, setUser] = useState<any>(null)
 
-  useEffect(() => {
-    getUser()
-  }, [])
-
-  const getUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    setUser(user)
-    if (user) fetchAppointments(user.id)
-  }
-
   const fetchAppointments = async (userId: string) => {
     const { data, error } = await supabase
       .from('appointments')
@@ -65,6 +55,16 @@ const MyAppointments = () => {
     
     if (!error && data) setAppointments(data)
   }
+
+  useEffect(() => {
+    const loadUserAndAppointments = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setUser(user)
+      if (user) fetchAppointments(user.id)
+    }
+
+    loadUserAndAppointments()
+  }, [])
 
   const cancelAppointment = async (id: string) => {
     const { error } = await supabase
