@@ -33,6 +33,11 @@ function App() {
 
   useEffect(() => {
     let isMounted = true
+    const loadingTimeout = setTimeout(() => {
+      if (isMounted) {
+        setLoading(false)
+      }
+    }, 8000)
 
     const initAuth = async () => {
       try {
@@ -80,6 +85,7 @@ function App() {
 
     return () => {
       isMounted = false
+      clearTimeout(loadingTimeout)
       subscription.unsubscribe()
     }
   }, [])
