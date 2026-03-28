@@ -11,27 +11,27 @@ const DoctorList = () => {
   const [specialty, setSpecialty] = useState('')
 
   useEffect(() => {
-    fetchDoctors()
-  }, [specialty])
+    const loadDoctors = async () => {
+      setLoading(true)
+      let query = supabase
+        .from('doctors')
+        .select(`
+          *,
+          profiles:profiles(full_name, email)
+        `)
+        .eq('is_active', true)
 
-  const fetchDoctors = async () => {
-    setLoading(true)
-    let query = supabase
-      .from('doctors')
-      .select(`
-        *,
-        profiles:profiles(full_name, email)
-      `)
-      .eq('is_active', true)
+      if (specialty) {
+        query = query.eq('specialty', specialty)
+      }
 
-    if (specialty) {
-      query = query.eq('specialty', specialty)
+      const { data, error } = await query
+      if (!error && data) setDoctors(data)
+      setLoading(false)
     }
 
-    const { data, error } = await query
-    if (!error && data) setDoctors(data)
-    setLoading(false)
-  }
+    loadDoctors()
+  }, [specialty])
 
   return (
     <div>
@@ -104,9 +104,32 @@ const BookAppointment = () => {
   }, [])
 
   useEffect(() => {
-    if (selectedDate && doctorId) {
-      fetchAvailableSlots()
+    if (!selectedDate || !doctorId) {
+      return
     }
+
+    const loadAvailableSlots = async () => {
+      // Generate time slots (9 AM to 5 PM)
+      const slots = []
+      for (let hour = 9; hour <= 17; hour++) {
+        slots.push(`${hour.toString().padStart(2, '0')}:00`)
+        if (hour !== 17) slots.push(`${hour.toString().padStart(2, '0')}:30`)
+      }
+
+      // Get booked slots
+      const { data: booked } = await supabase
+        .from('appointments')
+        .select('appointment_time')
+        .eq('doctor_id', doctorId)
+        .eq('appointment_date', selectedDate)
+        .not('status', 'eq', 'cancelled')
+
+      const bookedTimes = booked?.map(b => b.appointment_time) || []
+      const available = slots.filter(slot => !bookedTimes.includes(slot))
+      setAvailableSlots(available)
+    }
+
+    loadAvailableSlots()
   }, [selectedDate, doctorId])
 
   const fetchDoctor = async (id: string) => {
@@ -116,27 +139,6 @@ const BookAppointment = () => {
       .eq('id', id)
       .single()
     if (data) setDoctor(data)
-  }
-
-  const fetchAvailableSlots = async () => {
-    // Generate time slots (9 AM to 5 PM)
-    const slots = []
-    for (let hour = 9; hour <= 17; hour++) {
-      slots.push(`${hour.toString().padStart(2, '0')}:00`)
-      if (hour !== 17) slots.push(`${hour.toString().padStart(2, '0')}:30`)
-    }
-    
-    // Get booked slots
-    const { data: booked } = await supabase
-      .from('appointments')
-      .select('appointment_time')
-      .eq('doctor_id', doctorId)
-      .eq('appointment_date', selectedDate)
-      .not('status', 'eq', 'cancelled')
-
-    const bookedTimes = booked?.map(b => b.appointment_time) || []
-    const available = slots.filter(slot => !bookedTimes.includes(slot))
-    setAvailableSlots(available)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {

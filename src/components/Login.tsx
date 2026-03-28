@@ -60,7 +60,7 @@ export const Login = () => {
       }
     } else {
       // SIGNUP - Create account with selected role
-      const { data, error } = await supabase.auth.signUp({ 
+      const { error } = await supabase.auth.signUp({ 
         email, 
         password,
         options: {

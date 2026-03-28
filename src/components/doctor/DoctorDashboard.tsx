@@ -123,28 +123,28 @@ const AllAppointments = () => {
   const [filter, setFilter] = useState('all')
 
   useEffect(() => {
-    fetchAppointments()
-  }, [filter])
+    const loadAppointments = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      let query = supabase
+        .from('appointments')
+        .select(`
+          *,
+          patient:profiles!patient_id(full_name, email)
+        `)
+        .eq('doctor_id', user?.id)
+        .order('appointment_date', { ascending: false })
 
-  const fetchAppointments = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    let query = supabase
-      .from('appointments')
-      .select(`
-        *,
-        patient:profiles!patient_id(full_name, email)
-      `)
-      .eq('doctor_id', user?.id)
-      .order('appointment_date', { ascending: false })
+      if (filter !== 'all') {
+        query = query.eq('status', filter)
+      }
 
-    if (filter !== 'all') {
-      query = query.eq('status', filter)
+      const { data, error } = await query
+      if (!error && data) setAppointments(data)
+      setLoading(false)
     }
 
-    const { data, error } = await query
-    if (!error && data) setAppointments(data)
-    setLoading(false)
-  }
+    loadAppointments()
+  }, [filter])
 
   return (
     <div>
@@ -196,7 +196,6 @@ const AllAppointments = () => {
 // Availability Manager Component
 const AvailabilityManager = () => {
   const [availability, setAvailability] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
   const [newSlot, setNewSlot] = useState({
     day_of_week: 1,
     start_time: '09:00',
@@ -215,7 +214,6 @@ const AvailabilityManager = () => {
       .eq('doctor_id', user?.id)
     
     if (data) setAvailability(data)
-    setLoading(false)
   }
 
   const addAvailability = async () => {

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Routes, Route, useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 // Dashboard Stats Component
 const DashboardStats = () => {
