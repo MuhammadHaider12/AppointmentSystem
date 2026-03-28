@@ -8,6 +8,41 @@ import { DoctorDashboard } from './components/doctor/DoctorDashboard'
 import { AdminDashboard } from './components/admin/AdminDashboard'
 import './App.css'
 
+const SESSION_GUARD_KEY = 'appointment_system_session_guard_version'
+const SESSION_GUARD_VERSION = '2026-03-28-auth-state-v1'
+
+const clearStaleAuthStateOnce = async () => {
+  try {
+    const currentVersion = window.localStorage.getItem(SESSION_GUARD_KEY)
+    if (currentVersion === SESSION_GUARD_VERSION) return
+
+    // Force a one-time local sign-out and remove stale auth artifacts from older builds.
+    await supabase.auth.signOut()
+
+    const localKeys: string[] = []
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const key = window.localStorage.key(i)
+      if (key && (key.startsWith('sb-') || key.startsWith('supabase.auth.'))) {
+        localKeys.push(key)
+      }
+    }
+    localKeys.forEach((key) => window.localStorage.removeItem(key))
+
+    const sessionKeys: string[] = []
+    for (let i = 0; i < window.sessionStorage.length; i += 1) {
+      const key = window.sessionStorage.key(i)
+      if (key && (key.startsWith('sb-') || key.startsWith('supabase.auth.'))) {
+        sessionKeys.push(key)
+      }
+    }
+    sessionKeys.forEach((key) => window.sessionStorage.removeItem(key))
+
+    window.localStorage.setItem(SESSION_GUARD_KEY, SESSION_GUARD_VERSION)
+  } catch {
+    // Non-blocking guard; app should continue even if storage operations fail.
+  }
+}
+
 function App() {
   const [session, setSession] = useState<any>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
@@ -54,6 +89,8 @@ function App() {
 
     const initAuth = async () => {
       try {
+        await clearStaleAuthStateOnce()
+
         // Get initial session
         const { data: { session } } = await supabase.auth.getSession()
         if (!isMounted) return
