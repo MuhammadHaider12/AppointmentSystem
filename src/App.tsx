@@ -15,16 +15,9 @@ function App() {
   const [loading, setLoading] = useState(true)
 
   const fetchUserRole = async (user: any) => {
-    const metadataRole = user?.user_metadata?.role
-    if (metadataRole === 'admin' || metadataRole === 'doctor' || metadataRole === 'patient') {
-      setUserRole(metadataRole)
-      setRoleResolved(true)
-      return
-    }
-
     try {
       const { data, error } = await supabase
-        .from('profiles')
+        .from('users')
         .select('role')
         .eq('id', user?.id)
         .maybeSingle()
@@ -32,10 +25,20 @@ function App() {
       if (!error && data) {
         setUserRole(data.role)
       } else {
-        setUserRole(null)
+        const metadataRole = user?.user_metadata?.role
+        if (metadataRole === 'admin' || metadataRole === 'doctor' || metadataRole === 'patient') {
+          setUserRole(metadataRole)
+        } else {
+          setUserRole(null)
+        }
       }
     } catch {
-      setUserRole(null)
+      const metadataRole = user?.user_metadata?.role
+      if (metadataRole === 'admin' || metadataRole === 'doctor' || metadataRole === 'patient') {
+        setUserRole(metadataRole)
+      } else {
+        setUserRole(null)
+      }
     } finally {
       setRoleResolved(true)
     }
