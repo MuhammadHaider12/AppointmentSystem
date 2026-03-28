@@ -11,15 +11,23 @@ import './App.css'
 function App() {
   const [session, setSession] = useState<any>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [roleResolved, setRoleResolved] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  const fetchUserRole = async (userId: string) => {
+  const fetchUserRole = async (user: any) => {
+    const metadataRole = user?.user_metadata?.role
+    if (metadataRole === 'admin' || metadataRole === 'doctor' || metadataRole === 'patient') {
+      setUserRole(metadataRole)
+      setRoleResolved(true)
+      return
+    }
+
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('role')
-        .eq('id', userId)
-        .single()
+        .eq('id', user?.id)
+        .maybeSingle()
 
       if (!error && data) {
         setUserRole(data.role)
@@ -28,6 +36,8 @@ function App() {
       }
     } catch {
       setUserRole(null)
+    } finally {
+      setRoleResolved(true)
     }
   }
 
@@ -47,14 +57,17 @@ function App() {
 
         setSession(session)
         if (session?.user) {
-          await fetchUserRole(session.user.id)
+          setRoleResolved(false)
+          await fetchUserRole(session.user)
         } else {
           setUserRole(null)
+          setRoleResolved(true)
         }
       } catch {
         if (!isMounted) return
         setSession(null)
         setUserRole(null)
+        setRoleResolved(true)
       } finally {
         if (isMounted) setLoading(false)
       }
@@ -70,13 +83,16 @@ function App() {
 
           setSession(session)
           if (session?.user) {
-            await fetchUserRole(session.user.id)
+            setRoleResolved(false)
+            await fetchUserRole(session.user)
           } else {
             setUserRole(null)
+            setRoleResolved(true)
           }
         } catch {
           if (!isMounted) return
           setUserRole(null)
+          setRoleResolved(true)
         } finally {
           if (isMounted) setLoading(false)
         }
@@ -116,19 +132,27 @@ function App() {
       <Toaster position="top-right" />
       <Routes>
         <Route path="/login" element={
-          !session || !userRole ? <Login /> : <Navigate to={getDashboardPath()} />
+          !session ? <Login /> : !roleResolved ? (
+            <div className="min-h-screen flex items-center justify-center text-gray-600">Preparing dashboard...</div>
+          ) : !userRole ? <Login /> : <Navigate to={getDashboardPath()} />
         } />
         
         <Route path="/patient/*" element={
-          session && userRole === 'patient' ? <PatientDashboard /> : <Navigate to="/login" />
+          !session ? <Navigate to="/login" /> : !roleResolved ? (
+            <div className="min-h-screen flex items-center justify-center text-gray-600">Loading patient dashboard...</div>
+          ) : userRole === 'patient' ? <PatientDashboard /> : <Navigate to="/login" />
         } />
         
         <Route path="/doctor/*" element={
-          session && userRole === 'doctor' ? <DoctorDashboard /> : <Navigate to="/login" />
+          !session ? <Navigate to="/login" /> : !roleResolved ? (
+            <div className="min-h-screen flex items-center justify-center text-gray-600">Loading doctor dashboard...</div>
+          ) : userRole === 'doctor' ? <DoctorDashboard /> : <Navigate to="/login" />
         } />
         
         <Route path="/admin/*" element={
-          session && userRole === 'admin' ? <AdminDashboard /> : <Navigate to="/login" />
+          !session ? <Navigate to="/login" /> : !roleResolved ? (
+            <div className="min-h-screen flex items-center justify-center text-gray-600">Loading admin dashboard...</div>
+          ) : userRole === 'admin' ? <AdminDashboard /> : <Navigate to="/login" />
         } />
         
         <Route path="/" element={<Navigate to={session ? getDashboardPath() : '/login'} />} />

@@ -31,32 +31,9 @@ export const Login = () => {
       }
 
       if (data.user) {
-        // Fetch user profile to get role
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', data.user.id)
-          .single()
-
-        if (profileError) {
-          toast.error('Error fetching user role')
-          setLoading(false)
-          return
-        }
-
-        // Redirect based on role
-        switch (profile.role) {
-          case 'admin':
-            navigate('/admin')
-            break
-          case 'doctor':
-            navigate('/doctor')
-            break
-          default:
-            navigate('/patient')
-        }
-        
-        toast.success(`Welcome back, ${profile.role}!`)
+        // App.tsx listens to auth changes and routes by role; route to root immediately.
+        navigate('/')
+        toast.success('Welcome back!')
       }
     } else {
       // SIGNUP - Public signup is only for patients and doctors
