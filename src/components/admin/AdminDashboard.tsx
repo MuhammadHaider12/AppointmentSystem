@@ -499,17 +499,46 @@ const ManageAppointments = () => {
     setLoading(false)
   }
 
-  const updateAppointmentStatus = async (id: string, status: string) => {
-    setUpdatingId(id)
+  const updateAppointmentStatus = async (apt: any, status: string) => {
+    setUpdatingId(apt.id)
+
+    let updatePayload: any = { status }
+    if (status === 'cancelled') {
+      const rejectionReason = window.prompt('Enter rejection reason for patient:')
+      if (!rejectionReason || !rejectionReason.trim()) {
+        toast.error('Rejection reason is required')
+        setUpdatingId(null)
+        return
+      }
+      updatePayload = {
+        status: 'cancelled',
+        notes: `Admin rejection reason: ${rejectionReason.trim()}`
+      }
+    }
+
+    if (status === 'confirmed') {
+      updatePayload.notes = null
+    }
+
     const { error } = await supabase
       .from('appointments')
-      .update({ status })
-      .eq('id', id)
+      .update(updatePayload)
+      .eq('id', apt.id)
+
+    if (!error && status === 'cancelled') {
+      await supabase
+        .from('time_slots')
+        .update({ is_available: true, appointment_id: null })
+        .eq('doctor_id', apt.doctor_id)
+        .eq('slot_date', apt.appointment_date)
+        .eq('slot_time', apt.appointment_time)
+        .eq('appointment_id', apt.id)
+    }
 
     if (error) {
-      toast.error(`Failed to ${status === 'confirmed' ? 'confirm' : 'update'} appointment`)
+      toast.error(`Failed to ${status === 'confirmed' ? 'accept' : 'reject'} appointment`)
     } else {
-      toast.success(`Appointment ${status === 'confirmed' ? 'confirmed' : status}`)
+      toast.success(status === 'confirmed' ? 'Appointment accepted' : 'Appointment rejected')
       fetchAppointments()
     }
     setUpdatingId(null)
@@ -545,22 +574,41 @@ const ManageAppointments = () => {
                       ? 'bg-green-100 text-green-800'
                       : apt.status === 'pending'
                         ? 'bg-yellow-100 text-yellow-800'
-                    : apt.status === 'completed'
+                    : apt.status === 'completed' || apt.status === 'checked'
                       ? 'bg-blue-100 text-blue-800'
+                    : apt.status === 'not_checked'
+                      ? 'bg-orange-100 text-orange-800'
+                    : apt.notes?.startsWith('Admin rejection reason:')
+                      ? 'bg-red-100 text-red-800'
                         : 'bg-gray-100 text-gray-800'
                   }`}>
-                    {apt.status === 'completed' ? 'checked' : apt.status}
+                    {apt.status === 'completed' || apt.status === 'checked'
+                      ? 'checked'
+                      : apt.status === 'not_checked'
+                        ? 'not checked'
+                      : apt.status === 'cancelled' && apt.notes?.startsWith('Admin rejection reason:')
+                        ? 'rejected'
+                        : apt.status}
                   </span>
                 </td>
                 <td className="px-6 py-4">
                   {apt.status === 'pending' ? (
-                    <button
-                      disabled={updatingId === apt.id}
-                      onClick={() => updateAppointmentStatus(apt.id, 'confirmed')}
-                      className="bg-green-500 text-white px-3 py-1 rounded text-sm disabled:opacity-50"
-                    >
-                      {updatingId === apt.id ? 'Updating...' : 'Confirm'}
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        disabled={updatingId === apt.id}
+                        onClick={() => updateAppointmentStatus(apt, 'confirmed')}
+                        className="bg-green-500 text-white px-3 py-1 rounded text-sm disabled:opacity-50"
+                      >
+                        {updatingId === apt.id ? 'Updating...' : 'Accept'}
+                      </button>
+                      <button
+                        disabled={updatingId === apt.id}
+                        onClick={() => updateAppointmentStatus(apt, 'cancelled')}
+                        className="bg-red-500 text-white px-3 py-1 rounded text-sm disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                    </div>
                   ) : (
                     <span className="text-xs text-gray-500">No action</span>
                   )}

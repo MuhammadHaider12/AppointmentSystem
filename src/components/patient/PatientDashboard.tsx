@@ -307,13 +307,17 @@ const MyAppointments = () => {
       case 'confirmed': return 'bg-green-100 text-green-800'
       case 'pending': return 'bg-yellow-100 text-yellow-800'
       case 'cancelled': return 'bg-red-100 text-red-800'
-      case 'completed': return 'bg-blue-100 text-blue-800'
+      case 'completed':
+      case 'checked': return 'bg-blue-100 text-blue-800'
+      case 'not_checked': return 'bg-orange-100 text-orange-800'
       default: return 'bg-gray-100 text-gray-800'
     }
   }
 
-  const getStatusLabel = (status: string) => {
-    if (status === 'completed') return 'checked'
+  const getStatusLabel = (status: string, notes?: string) => {
+    if (status === 'cancelled' && notes?.startsWith('Admin rejection reason:')) return 'rejected'
+    if (status === 'completed' || status === 'checked') return 'checked'
+    if (status === 'not_checked') return 'not checked'
     return status
   }
 
@@ -349,7 +353,7 @@ const MyAppointments = () => {
                 </div>
                 <div className="text-right">
                   <span className={`px-2 py-1 rounded text-sm ${getStatusColor(apt.status)}`}>
-                    {getStatusLabel(apt.status)}
+                    {getStatusLabel(apt.status, apt.notes)}
                   </span>
                   {apt.status === 'pending' && (
                     <button

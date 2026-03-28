@@ -8,7 +8,6 @@ import { format } from 'date-fns'
 const TodayAppointments = () => {
   const [appointments, setAppointments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [cancelingId, setCancelingId] = useState<string | null>(null)
 
   const fetchTodayAppointments = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -41,44 +40,9 @@ const TodayAppointments = () => {
     if (error) {
       toast.error('Failed to update status')
     } else {
-      toast.success(`Appointment ${status === 'completed' ? 'checked' : status}`)
+      toast.success(`Appointment marked ${status === 'not_checked' ? 'not checked' : status}`)
       fetchTodayAppointments()
     }
-  }
-
-  const cancelWithReason = async (apt: any) => {
-    const reason = window.prompt('Enter cancellation reason for patient:')
-    if (!reason || !reason.trim()) {
-      toast.error('Cancellation reason is required')
-      return
-    }
-
-    setCancelingId(apt.id)
-    const { error } = await supabase
-      .from('appointments')
-      .update({
-        status: 'cancelled',
-        notes: `Doctor cancellation reason: ${reason.trim()}`
-      })
-      .eq('id', apt.id)
-
-    if (!error) {
-      await supabase
-        .from('time_slots')
-        .update({ is_available: true, appointment_id: null })
-        .eq('doctor_id', apt.doctor_id)
-        .eq('slot_date', apt.appointment_date)
-        .eq('slot_time', apt.appointment_time)
-        .eq('appointment_id', apt.id)
-    }
-
-    if (error) {
-      toast.error('Failed to cancel appointment')
-    } else {
-      toast.success('Appointment cancelled with reason')
-      fetchTodayAppointments()
-    }
-    setCancelingId(null)
   }
 
   if (loading) return <div>Loading appointments...</div>
@@ -114,26 +78,28 @@ const TodayAppointments = () => {
                   {apt.status === 'confirmed' && (
                     <>
                       <button
-                        onClick={() => updateStatus(apt.id, 'completed')}
+                        onClick={() => updateStatus(apt.id, 'checked')}
                         className="bg-blue-500 text-white px-3 py-1 rounded text-sm"
                       >
                         Mark Checked
                       </button>
                       <button
-                        onClick={() => cancelWithReason(apt)}
-                        disabled={cancelingId === apt.id}
-                        className="bg-red-500 text-white px-3 py-1 rounded text-sm disabled:opacity-50"
+                        onClick={() => updateStatus(apt.id, 'not_checked')}
+                        className="bg-orange-500 text-white px-3 py-1 rounded text-sm"
                       >
-                        {cancelingId === apt.id ? 'Cancelling...' : 'Cancel'}
+                        Not Checked
                       </button>
                     </>
                   )}
                   <span className={`px-2 py-1 rounded text-sm ${
                     apt.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                    apt.status === 'checked' ? 'bg-blue-100 text-blue-800' :
+                    apt.status === 'not_checked' ? 'bg-orange-100 text-orange-800' :
                     apt.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                    apt.status === 'cancelled' ? 'bg-red-100 text-red-800' :
                     'bg-gray-100 text-gray-800'
                   }`}>
-                    {apt.status === 'completed' ? 'checked' : apt.status}
+                    {apt.status === 'not_checked' ? 'not checked' : apt.status}
                   </span>
                 </div>
               </div>
@@ -150,6 +116,7 @@ const AllAppointments = () => {
   const [appointments, setAppointments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
+  const [cancelingId, setCancelingId] = useState<string | null>(null)
 
   useEffect(() => {
     const loadAppointments = async () => {
@@ -175,6 +142,56 @@ const AllAppointments = () => {
     loadAppointments()
   }, [filter])
 
+  const cancelWithReason = async (apt: any) => {
+    const reason = window.prompt('Enter cancellation reason for patient:')
+    if (!reason || !reason.trim()) {
+      toast.error('Cancellation reason is required')
+      return
+    }
+
+    setCancelingId(apt.id)
+    const { error } = await supabase
+      .from('appointments')
+      .update({
+        status: 'cancelled',
+        notes: `Doctor cancellation reason: ${reason.trim()}`
+      })
+      .eq('id', apt.id)
+
+    if (!error) {
+      await supabase
+        .from('time_slots')
+        .update({ is_available: true, appointment_id: null })
+        .eq('doctor_id', apt.doctor_id)
+        .eq('slot_date', apt.appointment_date)
+        .eq('slot_time', apt.appointment_time)
+        .eq('appointment_id', apt.id)
+    }
+
+    if (error) {
+      toast.error('Failed to cancel appointment')
+    } else {
+      toast.success('Appointment cancelled with reason')
+      const { data: { user } } = await supabase.auth.getUser()
+      let query = supabase
+        .from('appointments')
+        .select(`
+          *,
+          patient:profiles!patient_id(full_name, email)
+        `)
+        .eq('doctor_id', user?.id)
+        .order('appointment_date', { ascending: false })
+
+      if (filter !== 'all') {
+        query = query.eq('status', filter)
+      }
+
+      const { data, error: refreshError } = await query
+      if (!refreshError && data) setAppointments(data)
+    }
+    setCancelingId(null)
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -187,7 +204,8 @@ const AllAppointments = () => {
           <option value="all">All</option>
           <option value="pending">Pending</option>
           <option value="confirmed">Confirmed</option>
-          <option value="completed">Completed</option>
+          <option value="checked">Checked</option>
+          <option value="not_checked">Not Checked</option>
           <option value="cancelled">Cancelled</option>
         </select>
       </div>
@@ -204,15 +222,30 @@ const AllAppointments = () => {
                   <p className="text-sm text-gray-600">
                     {format(new Date(apt.appointment_date), 'MMM dd, yyyy')} at {apt.appointment_time}
                   </p>
+                  {apt.notes && (
+                    <p className="text-xs text-red-600 mt-1">{apt.notes}</p>
+                  )}
                 </div>
-                <span className={`px-2 py-1 rounded text-sm ${
-                  apt.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                  apt.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                  apt.status === 'completed' ? 'bg-blue-100 text-blue-800' :
-                  'bg-red-100 text-red-800'
-                }`}>
-                  {apt.status}
-                </span>
+                <div className="flex items-center gap-2">
+                  {(apt.status === 'pending' || apt.status === 'confirmed') && (
+                    <button
+                      onClick={() => cancelWithReason(apt)}
+                      disabled={cancelingId === apt.id}
+                      className="bg-red-500 text-white px-3 py-1 rounded text-sm disabled:opacity-50"
+                    >
+                      {cancelingId === apt.id ? 'Cancelling...' : 'Cancel'}
+                    </button>
+                  )}
+                  <span className={`px-2 py-1 rounded text-sm ${
+                    apt.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                    apt.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                    apt.status === 'checked' ? 'bg-blue-100 text-blue-800' :
+                    apt.status === 'not_checked' ? 'bg-orange-100 text-orange-800' :
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    {apt.status === 'not_checked' ? 'not checked' : apt.status}
+                  </span>
+                </div>
               </div>
             </div>
           ))}
