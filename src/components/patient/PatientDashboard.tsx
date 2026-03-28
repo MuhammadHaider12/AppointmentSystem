@@ -312,11 +312,16 @@ const MyAppointments = () => {
     }
   }
 
+  const getStatusLabel = (status: string) => {
+    if (status === 'completed') return 'checked'
+    return status
+  }
+
   if (loading) return <div>Loading appointments...</div>
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">My Appointments</h2>
+      <h2 className="text-2xl font-bold mb-6">My Appointments History</h2>
       {appointments.length === 0 ? (
         <div className="text-center py-8 text-gray-500">
           No appointments found. Book your first appointment!
@@ -344,7 +349,7 @@ const MyAppointments = () => {
                 </div>
                 <div className="text-right">
                   <span className={`px-2 py-1 rounded text-sm ${getStatusColor(apt.status)}`}>
-                    {apt.status}
+                    {getStatusLabel(apt.status)}
                   </span>
                   {apt.status === 'pending' && (
                     <button
@@ -356,6 +361,11 @@ const MyAppointments = () => {
                   )}
                 </div>
               </div>
+              {apt.notes && (
+                <p className="text-sm text-red-600 mt-2">
+                  <strong>Update:</strong> {apt.notes}
+                </p>
+              )}
             </div>
           ))}
         </div>

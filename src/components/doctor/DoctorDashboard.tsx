@@ -8,6 +8,7 @@ import { format } from 'date-fns'
 const TodayAppointments = () => {
   const [appointments, setAppointments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [cancelingId, setCancelingId] = useState<string | null>(null)
 
   const fetchTodayAppointments = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -40,9 +41,44 @@ const TodayAppointments = () => {
     if (error) {
       toast.error('Failed to update status')
     } else {
-      toast.success(`Appointment ${status}`)
+      toast.success(`Appointment ${status === 'completed' ? 'checked' : status}`)
       fetchTodayAppointments()
     }
+  }
+
+  const cancelWithReason = async (apt: any) => {
+    const reason = window.prompt('Enter cancellation reason for patient:')
+    if (!reason || !reason.trim()) {
+      toast.error('Cancellation reason is required')
+      return
+    }
+
+    setCancelingId(apt.id)
+    const { error } = await supabase
+      .from('appointments')
+      .update({
+        status: 'cancelled',
+        notes: `Doctor cancellation reason: ${reason.trim()}`
+      })
+      .eq('id', apt.id)
+
+    if (!error) {
+      await supabase
+        .from('time_slots')
+        .update({ is_available: true, appointment_id: null })
+        .eq('doctor_id', apt.doctor_id)
+        .eq('slot_date', apt.appointment_date)
+        .eq('slot_time', apt.appointment_time)
+        .eq('appointment_id', apt.id)
+    }
+
+    if (error) {
+      toast.error('Failed to cancel appointment')
+    } else {
+      toast.success('Appointment cancelled with reason')
+      fetchTodayAppointments()
+    }
+    setCancelingId(null)
   }
 
   if (loading) return <div>Loading appointments...</div>
@@ -75,36 +111,29 @@ const TodayAppointments = () => {
                   )}
                 </div>
                 <div className="flex space-x-2">
-                  {apt.status === 'pending' && (
+                  {apt.status === 'confirmed' && (
                     <>
                       <button
-                        onClick={() => updateStatus(apt.id, 'confirmed')}
-                        className="bg-green-500 text-white px-3 py-1 rounded text-sm"
+                        onClick={() => updateStatus(apt.id, 'completed')}
+                        className="bg-blue-500 text-white px-3 py-1 rounded text-sm"
                       >
-                        Confirm
+                        Mark Checked
                       </button>
                       <button
-                        onClick={() => updateStatus(apt.id, 'cancelled')}
-                        className="bg-red-500 text-white px-3 py-1 rounded text-sm"
+                        onClick={() => cancelWithReason(apt)}
+                        disabled={cancelingId === apt.id}
+                        className="bg-red-500 text-white px-3 py-1 rounded text-sm disabled:opacity-50"
                       >
-                        Cancel
+                        {cancelingId === apt.id ? 'Cancelling...' : 'Cancel'}
                       </button>
                     </>
-                  )}
-                  {apt.status === 'confirmed' && (
-                    <button
-                      onClick={() => updateStatus(apt.id, 'completed')}
-                      className="bg-blue-500 text-white px-3 py-1 rounded text-sm"
-                    >
-                      Complete
-                    </button>
                   )}
                   <span className={`px-2 py-1 rounded text-sm ${
                     apt.status === 'confirmed' ? 'bg-green-100 text-green-800' :
                     apt.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                     'bg-gray-100 text-gray-800'
                   }`}>
-                    {apt.status}
+                    {apt.status === 'completed' ? 'checked' : apt.status}
                   </span>
                 </div>
               </div>
