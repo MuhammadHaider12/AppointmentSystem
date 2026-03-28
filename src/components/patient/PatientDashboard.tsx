@@ -101,7 +101,13 @@ const BookAppointment = () => {
       const pathParts = window.location.pathname.split('/')
       const id = pathParts[pathParts.length - 1]
       setDoctorId(id)
-      await fetchDoctor(id)
+      
+      const { data } = await supabase
+        .from('doctors')
+        .select('*, profiles(full_name, specialty)')
+        .eq('id', id)
+        .single()
+      if (data) setDoctor(data)
     }
     initDoctor()
   }, [])
@@ -134,15 +140,6 @@ const BookAppointment = () => {
 
     loadAvailableSlots()
   }, [selectedDate, doctorId])
-
-  const fetchDoctor = async (id: string) => {
-    const { data } = await supabase
-      .from('doctors')
-      .select('*, profiles(full_name, specialty)')
-      .eq('id', id)
-      .single()
-    if (data) setDoctor(data)
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -251,8 +248,7 @@ const MyAppointments = () => {
   const [appointments, setAppointments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const fetchAppointments = async () => {
+  const fetchAppointments = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     const { data, error } = await supabase
       .from('appointments')
@@ -269,8 +265,9 @@ const MyAppointments = () => {
 
     if (!error && data) setAppointments(data)
     setLoading(false)
-    }
+  }
 
+  useEffect(() => {
     fetchAppointments()
   }, [])
 
